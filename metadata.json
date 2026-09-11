@@ -1,6 +1,6 @@
 {
   "name": "Minecraft1",
-  "description": "A 3D voxel sandbox game inspired by Minecraft featuring infinite world generation, block placement/destruction, inventory, crafting, day-night cycle, and settings.",
+  "description": "A 3D voxel sandbox game inspired by Minecraft featuring infinite world generation, biomes, block placement/destruction, crafting, wearable armor systems, artifacts, and settings.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

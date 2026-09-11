@@ -106,6 +106,9 @@ canvas#scene{position:fixed;inset:0;z-index:1;display:block}
 .slot.sel{border-color:#fff;outline:2px solid #fff;outline-offset:1px;background:rgba(20,20,20,.55)}
 #btnInv{width:var(--slot);height:var(--slot);border-radius:3px;background:rgba(20,20,20,.55);border:2px solid #3a3a3a;color:#7cc24f;font-family:'Press Start 2P',monospace;font-size:10px;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
 #bars{position:absolute;left:50%;bottom:calc(10px + var(--safe) + var(--slot) + 14px);transform:translateX(-50%);display:flex;justify-content:space-between;align-items:flex-end;width:calc(var(--slot)*10 + 44px)}
+#heartsCol{display:flex;flex-direction:column;gap:2px;align-items:flex-start}
+#armorBar{display:none;gap:1px;margin-bottom:1px}
+#armorBar img{width:clamp(12px, 3.4vw, 19px);height:clamp(12px, 3.4vw, 19px);image-rendering:pixelated}
 #hearts,#hunger{display:flex;gap:1px}
 #hearts img,#hunger img{width:clamp(12px, 3.4vw, 19px);image-rendering:pixelated}
 #flash{position:fixed;inset:0;z-index:60;pointer-events:none;opacity:0;background:radial-gradient(80% 80% at 50% 50%, rgba(255,0,0,.40), rgba(175,0,0,.72));transition:opacity .18s ease}
@@ -244,7 +247,13 @@ canvas#scene{position:fixed;inset:0;z-index:1;display:block}
 <div id="toast"></div>
 <div id="hud">
   <div id="crosshair"></div>
-  <div id="bars"><div id="hearts"></div><div id="hunger"></div></div>
+  <div id="bars">
+    <div id="heartsCol">
+      <div id="armorBar"></div>
+      <div id="hearts"></div>
+    </div>
+    <div id="hunger"></div>
+  </div>
   <div id="hotbar"></div>
 </div>
 <div id="joyBase"><div id="joyKnob"></div></div>
@@ -424,6 +433,41 @@ function genPlanks(seed){const c=makeCanvas(16,16),g=c.getContext('2d'),rng=mulb
   for(let i=0;i<6;i++){g.fillStyle='#b8935a';g.fillRect((rng()*16)|0,(rng()*16)|0,1,1);}
   return c;}
 
+function genSnowTop(seed){
+  const c=makeCanvas(16,16),g=c.getContext('2d'),rng=mulberry32(seed);
+  const pal=['#f5f8ff','#ffffff','#ffffff','#ffffff','#edf2fb','#e6edf8','#f1f5fd'];
+  for(let y=0;y<16;y++){
+    for(let x=0;x<16;x++){
+      g.fillStyle=pick(rng,pal);
+      g.fillRect(x,y,1,1);
+    }
+  }
+  for(let i=0;i<8;i++){
+    g.fillStyle='#dce4f4';
+    g.fillRect((rng()*16)|0,(rng()*16)|0,1,1);
+  }
+  return c;
+}
+
+function genSnowSide(seed){
+  const c=makeCanvas(16,16),g=c.getContext('2d'),rng=mulberry32(seed);
+  paintDirt(g,seed+7);
+  const sp=['#ffffff','#ffffff','#f5f8ff','#edf2fb','#e4ecf7'];
+  for(let x=0;x<16;x++){
+    let d=3+(rng()<0.5?1:0);
+    if(rng()<0.15){d=5;}
+    for(let y=0;y<d;y++){
+      g.fillStyle=pick(rng,sp);
+      g.fillRect(x,y,1,1);
+    }
+    if(rng()<0.35){
+      g.fillStyle=pick(rng,sp);
+      g.fillRect(x,d,1,1);
+    }
+  }
+  return c;
+}
+
 /* Custom Crafting Table textures from Artifact Store */
 function makeCTableTopCanvas(){
   const c=document.createElement('canvas');c.width=128;c.height=128;const ctx=c.getContext('2d');
@@ -601,6 +645,7 @@ const cvCTableTop=makeCTableTopCanvas();
 const cvCTableFront=makeCTableFrontCanvas();
 const cvCTableSide=makeCTableSideCanvas();
 const cvCTableBottom=makeCTableBottomCanvas();
+const cvSnowTop=genSnowTop(7721), cvSnowSide=genSnowSide(7722);
 
 function buildCraftingTable(scaleToBlock){
   const top=toTexture(cvCTableTop), front=toTexture(cvCTableFront), side=toTexture(cvCTableSide), bottom=toTexture(cvCTableBottom);
@@ -621,7 +666,7 @@ function buildCraftingTable(scaleToBlock){
   return mesh;
 }
 
-const TILES=16;
+const TILES=18;
 const TILE_SZ=128;
 const atlas=(function(){
   const c=makeCanvas(TILES*TILE_SZ,TILE_SZ),g=c.getContext('2d');
@@ -629,7 +674,7 @@ const atlas=(function(){
   const list=[
     cvGrassTop,cvSide,cvDirt,cvStone,cvSand,cvOakSide,cvLeavesSolid,
     cvCoal,cvIron,cvBedrock,cvPlanks,cvCTableSide,cvCTableTop,cvCTableFront,cvCTableBottom,
-    cvOakTop
+    cvOakTop,cvSnowTop,cvSnowSide
   ];
   for(let i=0;i<list.length;i++){
     g.drawImage(list[i],i*TILE_SZ,0,TILE_SZ,TILE_SZ);
@@ -703,7 +748,7 @@ applyRender();applyFov();
 /* ---------- world engine ---------- */
 const WORLD_SEED=9137;
 const TOP_Y=48, BEDROCK_Y=-36, SEA_LEVEL=7, CH=16;
-const AIR=0,GRASS=1,DIRT=2,STONE=3,SAND=4,WATER=5,WOOD=6,LEAFB=7,COAL=8,IRON=9,BEDROCK=10,PLANK=11,CTABLE=12;
+const AIR=0,GRASS=1,DIRT=2,STONE=3,SAND=4,WATER=5,WOOD=6,LEAFB=7,COAL=8,IRON=9,BEDROCK=10,PLANK=11,CTABLE=12,SNOW=13;
 const edits=new Map();
 function ekey(x,y,z){return (y+1024)*4294967296+(z+32768)*65536+(x+32768);}
 function setB(x,y,z,v){edits.set(ekey(x,y,z),v);}
@@ -711,6 +756,39 @@ const treeBlocks=new Map();
 const brokenTree=new Map();
 function mountainAmt(x,z){return sstep(0.44,0.60,fbm(x/95,z/95,WORLD_SEED+303,2));}
 function plainsAmt(x,z){return sstep(0.46,0.60,fbm(x/130,z/130,WORLD_SEED+1234,2));}
+
+/* ---------- Climate & Biome System (Temperature & Humidity Noise Maps) ---------- */
+function getTemperature(x,z){
+  return clamp(fbm(x/190,z/190,WORLD_SEED+719,2)/0.75,0,1);
+}
+function getHumidity(x,z){
+  return clamp(fbm((x+180)/170,(z-240)/170,WORLD_SEED+841,2)/0.75,0,1);
+}
+function getBiomeInfo(x,z,y){
+  const h=heightAt(x,z);
+  const sampleY=(y!==undefined)?y:h;
+  const temp=getTemperature(x,z);
+  const humid=getHumidity(x,z);
+  const altCooling=Math.max(0,(sampleY-17)*0.038);
+  const effTemp=temp-altCooling;
+
+  if(h<=SEA_LEVEL-2){
+    return {id:'ocean',name:'Ocean',temp:temp,humid:humid,effTemp:effTemp};
+  }
+  if(effTemp<0.28||(sampleY>=22&&(effTemp<0.36||sampleY>=26))){
+    if(sampleY>=22||h>=22){
+      return {id:'snowy_peaks',name:'Snowy Peaks',temp:temp,humid:humid,effTemp:effTemp};
+    }
+    return {id:'snowy',name:'Snowy Tundra',temp:temp,humid:humid,effTemp:effTemp};
+  }
+  if(temp>0.57&&humid<0.41){
+    return {id:'desert',name:'Desert',temp:temp,humid:humid,effTemp:effTemp};
+  }
+  if(humid>=0.48&&temp>=0.33){
+    return {id:'forest',name:'Forest',temp:temp,humid:humid,effTemp:effTemp};
+  }
+  return {id:'plains',name:'Plains',temp:temp,humid:humid,effTemp:effTemp};
+}
 function baseHeightF(x,z){
   const s=WORLD_SEED;
   const warpX=(fbm(x/31,z/31,s+41,2)-0.5)*10;
@@ -733,7 +811,49 @@ const hCache=new Map(),sCache=new Map();
 function heightAt(x,z){const k=(x+32768)+(z+32768)*65536;const c=hCache.get(k);if(c!==undefined){return c;}let h=Math.floor(Math.min(baseHeightF(x,z),lakeFloorAt(x,z)));h=clamp(h,2,TOP_Y-8);if(hCache.size>260000){hCache.clear();sCache.clear();}hCache.set(k,h);return h;}
 function waterCol(x,z){return heightAt(x,z)<=SEA_LEVEL-2;}
 function sandAt(x,z){const k=(x+32768)+(z+32768)*65536;const c=sCache.get(k);if(c!==undefined){return c;}let r=0;if(!waterCol(x,z)){const w=1+(vnoise(x/6,z/6,424)>0.55?1:0)+(hash2(x,z,4242)>0.86?1:0);outer:for(let dz=-w;dz<=w;dz++){for(let dx=-w;dx<=w;dx++){if(waterCol(x+dx,z+dz)){r=1;break outer;}}}}sCache.set(k,r);return r;}
-function genBlock(x,y,z){const h=heightAt(x,z);if(y>h){return (h<=SEA_LEVEL-2&&y<=SEA_LEVEL-1)?WATER:AIR;}const rv=ravineAt(x,z);if(rv>0&&y>h-rv&&y>BEDROCK_Y+1){return AIR;}const under=h<=SEA_LEVEL-2;const sand=(!under)&&sandAt(x,z)===1;if(y===h){return (under||sand)?SAND:GRASS;}if(sand&&y>=h-2){return SAND;}if(y>=h-3){return DIRT;}if(caveAt(x,y,z)&&y>BEDROCK_Y+1){return AIR;}return oreAt(x,y,z)||STONE;}
+function genBlock(x,y,z){
+  const h=heightAt(x,z);
+  if(y>h){return (h<=SEA_LEVEL-2&&y<=SEA_LEVEL-1)?WATER:AIR;}
+  const rv=ravineAt(x,z);
+  if(rv>0&&y>h-rv&&y>BEDROCK_Y+1){return AIR;}
+  if(caveAt(x,y,z)&&y>BEDROCK_Y+1){return AIR;}
+
+  const bInfo=getBiomeInfo(x,z,y);
+  const under=h<=SEA_LEVEL-2;
+  const isBeach=(!under)&&sandAt(x,z)===1;
+
+  if(under){
+    return (y>=h-2)?SAND:(oreAt(x,y,z)||STONE);
+  }
+
+  // 1. Snowy Peaks & Snowy Tundra Biome
+  if(bInfo.id==='snowy_peaks'||bInfo.id==='snowy'){
+    if(y===h){return SNOW;}
+    if(y>=h-2){return (h>=25)?STONE:DIRT;}
+    if(y>=h-4&&h<25){return DIRT;}
+    return oreAt(x,y,z)||STONE;
+  }
+
+  // 2. Desert Biome (Deep sand layers)
+  if(bInfo.id==='desert'){
+    if(y>=h-4){return SAND;}
+    if(y>=h-6&&hash2(x,z,5521)<0.5){return SAND;}
+    return oreAt(x,y,z)||STONE;
+  }
+
+  // Shore / Beach
+  if(isBeach){
+    if(y===h){return SAND;}
+    if(y>=h-2){return SAND;}
+    if(y>=h-3){return DIRT;}
+    return oreAt(x,y,z)||STONE;
+  }
+
+  // 3. Forest & Plains Biomes
+  if(y===h){return GRASS;}
+  if(y>=h-3){return DIRT;}
+  return oreAt(x,y,z)||STONE;
+}
 const blockCache=new Map();
 function getB(x,y,z){if(y<BEDROCK_Y){return AIR;}if(y===BEDROCK_Y){return BEDROCK;}const e=ekey(x,y,z);const ed=edits.get(e);if(ed!==undefined){return ed;}if(y>=TOP_Y){return AIR;}const c=blockCache.get(e);if(c!==undefined){return c;}const v=genBlock(x,y,z);if(blockCache.size>500000){blockCache.clear();}blockCache.set(e,v);return v;}
 
@@ -770,6 +890,11 @@ function tileFor(b,f){
     if(f[1]<0){return 14;}
     if(f[2]!==0){return 13;}
     return 11;
+  }
+  if(b===SNOW){
+    if(f[1]>0){return 16;}
+    if(f[1]<0){return 2;}
+    return 17;
   }
   return 3;
 }
@@ -833,12 +958,18 @@ function treesInChunk(cx,cz,TP_sides,TP_caps,LP,cells){
       const tz=bz+1+((hash2(bx,bz,911)*3)|0);
       if(tx<x0||tx>=x0+CH||tz<z0||tz>=z0+CH){continue;}
       if(Math.hypot(tx,tz)<9){continue;}
+      const bInfo=getBiomeInfo(tx,tz);
+      if(bInfo.id==='desert'||bInfo.id==='snowy_peaks'){continue;}
       const mAmt=mountainAmt(tx,tz);
       const pAmt=plainsAmt(tx,tz);
-      const treeProb=(pAmt>0.5)?0.05:((mAmt>0.4)?0.16:0.30);
+      let treeProb=0.10;
+      if(bInfo.id==='forest'){treeProb=0.55;}
+      else if(bInfo.id==='snowy'){treeProb=0.08;}
+      else{treeProb=(pAmt>0.5)?0.05:((mAmt>0.4)?0.16:0.25);}
       if(hash2(gx,gz,909)>=treeProb){continue;}
       const h=heightAt(tx,tz);
-      if(h<SEA_LEVEL-1||sandAt(tx,tz)===1||h>=28){continue;}
+      if(h<SEA_LEVEL-1||sandAt(tx,tz)===1||h>=26){continue;}
+      if(getB(tx,h,tz)!==GRASS){continue;}
       if(Math.abs(heightAt(tx+1,tz)-h)>1||Math.abs(heightAt(tx,tz+1)-h)>1){continue;}
       const tseed=(((hash2(tx,tz,9131)*4294967296)>>>0)^Math.imul(WORLD_SEED,2654435761))|0;
       const shape=generateTreeShape(mulberry32(tseed));
@@ -1009,6 +1140,7 @@ function respawnPlayer(){
   pcz=Math.floor(player.pos.z/CH);
   streamDirty=true;
   updateStreaming();
+  syncEquippedArmor();
   toast('Respawned with all hearts!');
 }
 
@@ -1028,7 +1160,13 @@ if(btnTitleScreen){
 function damage(n,reason){
   if(isDead){return;}
   if(flashTimer){clearTimeout(flashTimer);flashTimer=null;}
-  player.health=clamp(player.health-n,0,10);
+  let actualN = n;
+  const pts = (typeof getPlayerArmorPoints === 'function') ? getPlayerArmorPoints() : 0;
+  if(pts > 0 && reason !== 'Steve was killed' && !String(reason).includes('starved') && !String(reason).includes('fell out of')){
+    const reduction = Math.min(0.80, pts * 0.04);
+    actualN = Math.max(1, Math.round(n * (1 - reduction)));
+  }
+  player.health=clamp(player.health-actualN,0,10);
   updateHearts();
   
   if(player.health<=0){
@@ -1224,9 +1362,9 @@ highlightMesh.visible=false;
 highlightMesh.renderOrder=999;
 scene.add(highlightMesh);
 const partGeo=new THREE.BoxGeometry(0.1,0.1,0.1);
-const partMats=['#6b4a2c','#7a5634','#59402a','#83603c'].map(function(c){return new THREE.MeshLambertMaterial({color:c});});
+const partMats=['#6b4a2c','#7a5634','#59402a','#83603c','#ffffff','#edf2fb'].map(function(c){return new THREE.MeshLambertMaterial({color:c});});
 const PARTS=24;const parts=[];
-for(let i=0;i<PARTS;i++){const m=new THREE.Mesh(partGeo,partMats[i%4]);m.visible=false;scene.add(m);parts.push({m:m,vel:new THREE.Vector3(),life:0});}
+for(let i=0;i<PARTS;i++){const m=new THREE.Mesh(partGeo,partMats[i%partMats.length]);m.visible=false;scene.add(m);parts.push({m:m,vel:new THREE.Vector3(),life:0});}
 let partIdx=0;
 function spawnParticles(px,py,pz){for(let i=0;i<10;i++){const p=parts[partIdx];partIdx=(partIdx+1)%PARTS;p.m.visible=true;p.m.position.set(px+0.5+(Math.random()-0.5)*0.7,py+0.5+(Math.random()-0.5)*0.7,pz+0.5+(Math.random()-0.5)*0.7);p.vel.set((Math.random()-0.5)*3,Math.random()*4+1,(Math.random()-0.5)*3);p.life=0.55;}}
 
@@ -1238,13 +1376,14 @@ function spawnParticles(px,py,pz){for(let i=0;i<10;i++){const p=parts[partIdx];p
 ===================================================================== */
 const NAME_OF={
   grass:'Grass',dirt:'Dirt',stone:'Stone',wood:'Oak Log',leaves:'Leaves',sand:'Sand',water:'Water',coal:'Coal',iron:'Iron',plank:'Planks',ctable:'Custom Crafting Table',bread:'Bread',iron_helmet:'Iron Helmet',
+  snow:'Snow Block',
   stick:'Stick',torch:'Torch',
   wood_sword:'Wooden Sword',stone_sword:'Stone Sword',iron_sword:'Iron Sword',
   wood_pickaxe:'Wooden Pickaxe',stone_pickaxe:'Stone Pickaxe',iron_pickaxe:'Iron Pickaxe',
   wood_axe:'Wooden Axe',stone_axe:'Stone Axe',iron_axe:'Iron Axe',
   wood_shovel:'Wooden Shovel',stone_shovel:'Stone Shovel',iron_shovel:'Iron Shovel'
 };
-const DROP_OF={};DROP_OF[GRASS]='grass';DROP_OF[DIRT]='dirt';DROP_OF[STONE]='stone';DROP_OF[SAND]='sand';DROP_OF[COAL]='coal';DROP_OF[IRON]='iron';DROP_OF[WOOD]='wood';DROP_OF[LEAFB]=null;DROP_OF[PLANK]='plank';DROP_OF[CTABLE]='ctable';
+const DROP_OF={};DROP_OF[GRASS]='grass';DROP_OF[DIRT]='dirt';DROP_OF[STONE]='stone';DROP_OF[SAND]='sand';DROP_OF[COAL]='coal';DROP_OF[IRON]='iron';DROP_OF[WOOD]='wood';DROP_OF[LEAFB]=null;DROP_OF[PLANK]='plank';DROP_OF[CTABLE]='ctable';DROP_OF[SNOW]='snow';
 const MAX_STACK=64;
 let hotbarItems=[
   {id:'grass',count:4},{id:'dirt',count:8},{id:'stone',count:16},{id:'wood',count:8},
@@ -1256,7 +1395,28 @@ invMain[1]={id:'stone',count:32};
 invMain[2]={id:'plank',count:24};
 invMain[3]={id:'stick',count:16};
 invMain[4]={id:'coal',count:12};
+invMain[5]={id:'iron_helmet',count:1};
 const craftSlots=[null,null,null,null,null,null,null,null,null];
+const ARMOR_SLOT_TYPES = ['helmet', 'chest', 'legs', 'boots'];
+const armorItems = [null, null, null, null];
+const armorSlotEls = [];
+function getArmorSlotFor(id){
+  if(!id) return -1;
+  if(id.includes('helmet')) return 0;
+  if(id.includes('chest') || id.includes('chestplate')) return 1;
+  if(id.includes('legs') || id.includes('leggings')) return 2;
+  if(id.includes('boots')) return 3;
+  return -1;
+}
+function getPlayerArmorPoints(){
+  let pts = 0;
+  for(let i=0; i<4; i++){
+    const it = armorItems[i];
+    if(!it) continue;
+    if(it.id === 'iron_helmet') pts += 2;
+  }
+  return pts;
+}
 let resultItem=null;
 let heldItem=null;
 let selectedSlot=null;
@@ -1280,6 +1440,7 @@ const RECIPES=[
   {inp:{stone:4,coal:1}, out:'iron', count:1},
   {inp:{sand:2,coal:1}, out:'stone', count:2},
   {inp:{dirt:2,stone:2}, out:'stone', count:3},
+  {inp:{snow:2}, out:'water', count:1},
 
   // Armor Progression
   {inp:{iron:5}, out:'iron_helmet', count:1},
@@ -1326,12 +1487,17 @@ function getItem(area,idx){
   if(area==='main'){return invMain[idx];}
   if(area==='hot'){return hotbarItems[idx];}
   if(area==='craft'){return craftSlots[idx];}
+  if(area==='armor'){return armorItems[idx];}
   return null;
 }
 function setItem(area,idx,v){
   if(area==='main'){invMain[idx]=v;}
   else if(area==='hot'){hotbarItems[idx]=v;}
   else if(area==='craft'){craftSlots[idx]=v;}
+  else if(area==='armor'){
+    armorItems[idx]=v;
+    syncEquippedArmor();
+  }
 }
 function craftCounts(){
   const m={};
@@ -1416,6 +1582,57 @@ function tapSlot(area,idx){
     }
     return;
   }
+  if(area==='armor'){
+    if(selectedSlot){
+      const src=getItem(selectedSlot.area,selectedSlot.idx);
+      if(src){
+        const reqSlot=getArmorSlotFor(src.id);
+        if(reqSlot===idx){
+          const cur=armorItems[idx];
+          if(!cur){
+            armorItems[idx]={id:src.id,count:1};
+            src.count-=1;
+            if(src.count<=0){
+              setItem(selectedSlot.area,selectedSlot.idx,null);
+              selectedSlot=null;
+            }
+            toast('Equipped '+(NAME_OF[src.id]||src.id));
+          }else{
+            armorItems[idx]={id:src.id,count:1};
+            src.count-=1;
+            if(src.count<=0){
+              setItem(selectedSlot.area,selectedSlot.idx,cur);
+            }else{
+              addItem(cur.id,cur.count);
+            }
+            toast('Swapped '+(NAME_OF[src.id]||src.id));
+          }
+          syncEquippedArmor();syncHotbar();refreshInv();
+          return;
+        }else{
+          toast('Cannot equip '+(NAME_OF[src.id]||src.id)+' in '+ARMOR_SLOT_TYPES[idx]+' slot!');
+          return;
+        }
+      }
+    }
+    const cur=armorItems[idx];
+    if(cur){
+      if(selectedSlot&&selectedSlot.area==='armor'&&selectedSlot.idx===idx){
+        if(addItem(cur.id,cur.count)){
+          armorItems[idx]=null;
+          selectedSlot=null;
+          toast('Unequipped '+(NAME_OF[cur.id]||cur.id));
+          syncEquippedArmor();syncHotbar();refreshInv();
+        }
+        return;
+      }else{
+        selectedSlot={area:'armor',idx:idx};
+        refreshInv();
+        return;
+      }
+    }
+    return;
+  }
   const clickedItem=getItem(area,idx);
   if(!selectedSlot){
     if(clickedItem){
@@ -1425,6 +1642,23 @@ function tapSlot(area,idx){
     return;
   }
   if(selectedSlot.area===area&&selectedSlot.idx===idx){
+    if(area!=='armor'&&clickedItem){
+      const reqSlot=getArmorSlotFor(clickedItem.id);
+      if(reqSlot>=0){
+        const oldArmor=armorItems[reqSlot];
+        armorItems[reqSlot]={id:clickedItem.id,count:1};
+        clickedItem.count-=1;
+        if(clickedItem.count<=0){
+          setItem(area,idx,oldArmor||null);
+        }else if(oldArmor){
+          addItem(oldArmor.id,oldArmor.count);
+        }
+        selectedSlot=null;
+        syncEquippedArmor();syncHotbar();refreshInv();
+        toast('Equipped '+(NAME_OF[armorItems[reqSlot].id]||'Armor'));
+        return;
+      }
+    }
     selectedSlot=null;
     refreshInv();
     return;
@@ -1449,9 +1683,24 @@ function tapSlot(area,idx){
       selectedSlot={area:area,idx:idx};
     }
   }else{
-    setItem(area,idx,srcItem);
-    setItem(selectedSlot.area,selectedSlot.idx,clickedItem);
-    selectedSlot={area:area,idx:idx};
+    if(selectedSlot.area==='armor'){
+      const reqSlot=getArmorSlotFor(clickedItem.id);
+      if(reqSlot===selectedSlot.idx){
+        setItem(area,idx,srcItem);
+        setItem(selectedSlot.area,selectedSlot.idx,clickedItem);
+        selectedSlot={area:area,idx:idx};
+      }else{
+        if(addItem(srcItem.id,srcItem.count)){
+          setItem(selectedSlot.area,selectedSlot.idx,null);
+          selectedSlot=null;
+          toast('Unequipped '+(NAME_OF[srcItem.id]||srcItem.id));
+        }
+      }
+    }else{
+      setItem(area,idx,srcItem);
+      setItem(selectedSlot.area,selectedSlot.idx,clickedItem);
+      selectedSlot={area:area,idx:idx};
+    }
   }
   refreshInv();syncHotbar();
 }
@@ -1477,7 +1726,7 @@ function doAttackTick(){
         const b=tgt.block;
         if(b===STONE||b===COAL||b===IRON){
           if(id.includes('pickaxe')){power=id.startsWith('iron')?5:(id.startsWith('stone')?3:2);}
-        }else if(b===DIRT||b===SAND||b===GRASS){
+        }else if(b===DIRT||b===SAND||b===GRASS||b===SNOW){
           if(id.includes('shovel')){power=id.startsWith('iron')?5:(id.startsWith('stone')?3:2);}
         }else if(b===WOOD||b===PLANK||b===CTABLE){
           if(id.includes('axe')){power=id.startsWith('iron')?5:(id.startsWith('stone')?3:2);}
@@ -1519,7 +1768,7 @@ function doAttackTick(){
   }else{resetBreak();}
 }
 let selSlot=0;
-const BLOCK_OF={grass:GRASS,dirt:DIRT,stone:STONE,wood:WOOD,leaves:LEAFB,sand:SAND,water:0,coal:COAL,iron:IRON,plank:PLANK,ctable:CTABLE};
+const BLOCK_OF={grass:GRASS,dirt:DIRT,stone:STONE,wood:WOOD,leaves:LEAFB,sand:SAND,water:0,coal:COAL,iron:IRON,plank:PLANK,ctable:CTABLE,snow:SNOW};
 function rayVoxel(maxD){
   const o=camera.position;
   const d=new THREE.Vector3(0,0,-1).applyEuler(camera.rotation).normalize();
@@ -1542,6 +1791,23 @@ function doPlace(){
   const item=hotbarItems[selSlot];
   if(item && item.id==='bread'){
     eatFood(selSlot);
+    return;
+  }
+  if(item && typeof getArmorSlotFor === 'function' && getArmorSlotFor(item.id) >= 0){
+    const slotIdx = getArmorSlotFor(item.id);
+    const oldArmor = armorItems[slotIdx];
+    armorItems[slotIdx] = { id: item.id, count: 1 };
+    item.count--;
+    if(item.count <= 0){
+      hotbarItems[selSlot] = oldArmor || null;
+    } else if(oldArmor){
+      addItem(oldArmor.id, oldArmor.count);
+    }
+    syncEquippedArmor();
+    syncHotbar();
+    refreshInv();
+    player.swing = 0.001;
+    toast('Equipped ' + (NAME_OF[armorItems[slotIdx].id] || 'Armor'));
     return;
   }
   const hit=rayVoxel(4.5);
@@ -1714,160 +1980,321 @@ function buildBreadModel(){
   const grp=new THREE.Group();grp.add(mesh);return grp;
 }
 
-/* ---------- Armor Helmet artifact ---------- */
-const HELMET_GRID = [
-  "................",
-  "...OOOOOOOOOO...",
-  "..OOMMMMMMMMOO..",
-  "..OMMMLLLLMMMO..",
-  ".OMMLLWWWWLLMMO.",
-  ".OMLLWWWWWWLLMO.",
-  ".OMLLWWWWWWLLMO.",
-  ".OMMMLLLLLLMMMO.",
-  ".OOMMMMMMMMMMOO.",
-  ".OMMODDDDDDOMMO.",
-  ".OMMD......DMMO.",
-  ".OMMD......DMMO.",
-  ".OMMD......DMMO.",
-  ".OMMDDDDDDDDMMO.",
-  "..OOOOOOOOOOOO..",
-  "................"
+/* ---------- Iron Helmet 10x9 Artifact ---------- */
+const HELMET_10x9_ROWS = [
+  ".BBBBBBBB.",
+  "BLWLLMMMDB",
+  "BWWLLMMMDB",
+  "BLLLMMMDDB",
+  "BMMDDDDDDB",
+  "BMD....DDB",
+  "BMD....DDB",
+  "BMDDDDDDDB",
+  ".BBBBBBBB."
 ];
+const HELMET_10x9_PAL = {
+  'B': [34, 36, 39],
+  'D': [82, 88, 96],
+  'M': [145, 153, 164],
+  'L': [203, 207, 214],
+  'W': [238, 242, 247]
+};
+
+const cvHelmet10x9 = (function(){
+  const c = document.createElement('canvas');
+  c.width = 10; c.height = 9;
+  const ctx = c.getContext('2d', { willReadFrequently: true });
+  for(let r = 0; r < 9; r++){
+    for(let col = 0; col < 10; col++){
+      const ch = HELMET_10x9_ROWS[r][col];
+      if(ch === '.'){
+        ctx.clearRect(col, r, 1, 1);
+      } else if(HELMET_10x9_PAL[ch]){
+        const rgb = HELMET_10x9_PAL[ch];
+        ctx.fillStyle = 'rgb(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ')';
+        ctx.fillRect(col, r, 1, 1);
+      }
+    }
+  }
+  return c;
+})();
+
+let ironHelmetImgSource = cvHelmet10x9;
+try {
+  const tryImg = new Image();
+  tryImg.crossOrigin = 'anonymous';
+  tryImg.onload = function(){
+    if(tryImg.naturalWidth && tryImg.naturalHeight){
+      ironHelmetImgSource = tryImg;
+    }
+  };
+  tryImg.src = '/mnt/data/src/assets/ec9f9fc8234ce422-crop_0.png';
+} catch(e){}
 
 function createHelmetCanvas(){
-  const c=makeCanvas(16,16),g=c.getContext('2d');
-  const pal={
-    'O':'#1e2023',
-    'D':'#4b4f55',
-    'M':'#8b9199',
-    'L':'#c6ccd4',
-    'W':'#edf1f5'
-  };
-  const W=16,H=16;
-  const filled=Array.from({length:H},()=>Array(W).fill(false));
-  for(let r=0;r<H;r++){
-    for(let cIdx=0;cIdx<W;cIdx++){
-      if(HELMET_GRID[r][cIdx]!=='.'){filled[r][cIdx]=true;}
-    }
-  }
-  const visited=Array.from({length:H},()=>Array(W).fill(false));
-  const q=[];
-  for(let r=0;r<H;r++){
-    for(let cIdx=0;cIdx<W;cIdx++){
-      if((r===0||r===H-1||cIdx===0||cIdx===W-1)&&!filled[r][cIdx]){
-        visited[r][cIdx]=true;
-        q.push([r,cIdx]);
-      }
-    }
-  }
-  while(q.length>0){
-    const [cr,cc]=q.shift();
-    const dirs=[[1,0],[-1,0],[0,1],[0,-1]];
-    for(let i=0;i<4;i++){
-      const nr=cr+dirs[i][0],nc=cc+dirs[i][1];
-      if(nr>=0&&nr<H&&nc>=0&&nc<W&&!visited[nr][nc]&&!filled[nr][nc]){
-        visited[nr][nc]=true;
-        q.push([nr,nc]);
-      }
-    }
-  }
-  for(let r=0;r<H;r++){
-    for(let cIdx=0;cIdx<W;cIdx++){
-      if(filled[r][cIdx]){
-        const ch=HELMET_GRID[r][cIdx];
-        if(pal[ch]){g.fillStyle=pal[ch];g.fillRect(cIdx,r,1,1);}
-      }else if(!visited[r][cIdx]){
-        g.fillStyle='#FFFFFF';
-        g.fillRect(cIdx,r,1,1);
+  const c = makeCanvas(16, 16), g = c.getContext('2d');
+  for(let r = 0; r < 9; r++){
+    for(let col = 0; col < 10; col++){
+      const ch = HELMET_10x9_ROWS[r][col];
+      if(ch !== '.' && HELMET_10x9_PAL[ch]){
+        const rgb = HELMET_10x9_PAL[ch];
+        g.fillStyle = 'rgb(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ')';
+        g.fillRect(col + 3, r + 3, 1, 1);
       }
     }
   }
   return c;
 }
-const cvHelmet=createHelmetCanvas();
+const cvHelmet = createHelmetCanvas();
 
 function buildHelmetModel(){
-  // WHITE INTERIOR FILL + STILL
-  const SPACING=0.32, GEOM=0.321, DEPTH=0.1;
-  const geom=new THREE.BoxGeometry(GEOM,GEOM,DEPTH);
-  const whiteGeom=new THREE.BoxGeometry(GEOM,GEOM,DEPTH);
-  const armorGroup=new THREE.Group();
+  const img = ironHelmetImgSource || cvHelmet10x9;
+  const gridW = 10, gridH = 9;
+  const SPACING = 0.32, GEOM = 0.321, DEPTH = 0.1;
 
-  const palMats={
-    'O':new THREE.MeshLambertMaterial({color:0x1e2023}),
-    'D':new THREE.MeshLambertMaterial({color:0x4b4f55}),
-    'M':new THREE.MeshLambertMaterial({color:0x8b9199}),
-    'L':new THREE.MeshLambertMaterial({color:0xc6ccd4}),
-    'W':new THREE.MeshLambertMaterial({color:0xedf1f5})
+  const helmetGroup = new THREE.Group();
+
+  // ---- pixel sampling ----
+  const off = document.createElement('canvas');
+  const ctx = off.getContext('2d', { willReadFrequently: true });
+  off.width = img.naturalWidth || img.width || 10;
+  off.height = img.naturalHeight || img.height || 9;
+  ctx.drawImage(img, 0, 0);
+  const cellW = off.width / gridW;
+  const cellH = off.height / gridH;
+
+  const filledMap = Array.from({ length: gridH }, () => Array(gridW).fill(false));
+  const colorMap = Array.from({ length: gridH }, () => Array(gridW).fill(null));
+
+  for(let r = 0; r < gridH; r++){
+    for(let c = 0; c < gridW; c++){
+      const sx = Math.floor(c * cellW), sy = Math.floor(r * cellH);
+      const sw = Math.max(1, Math.floor(cellW)), sh = Math.max(1, Math.floor(cellH));
+      const data = ctx.getImageData(sx, sy, sw, sh).data;
+      let tr = 0, tg = 0, tb = 0, n = 0;
+      for(let i = 0; i < data.length; i += 4){
+        if(data[i + 3] < 20) continue;
+        tr += data[i]; tg += data[i + 1]; tb += data[i + 2]; n++;
+      }
+      if(!n) continue;
+      tr /= n; tg /= n; tb /= n;
+      if(tr > 200 && tg > 200 && tb > 200) continue;
+      filledMap[r][c] = true;
+      colorMap[r][c] = { r: tr, g: tg, b: tb };
+    }
+  }
+
+  // ---- BFS flood fill from border to find outside ----
+  const visited = Array.from({ length: gridH }, () => Array(gridW).fill(false));
+  const queue = [];
+  const push = (r, c) => {
+    if(r < 0 || r >= gridH || c < 0 || c >= gridW) return;
+    if(filledMap[r][c] || visited[r][c]) return;
+    visited[r][c] = true; queue.push([r, c]);
   };
-  const whiteMat=new THREE.MeshLambertMaterial({color:0xffffff});
+  for(let c = 0; c < gridW; c++){ push(0, c); push(gridH - 1, c); }
+  for(let r = 0; r < gridH; r++){ push(r, 0); push(r, gridW - 1); }
+  for(let i = 0; i < queue.length; i++){
+    const [r, c] = queue[i];
+    push(r - 1, c); push(r + 1, c); push(r, c - 1); push(r, c + 1);
+  }
 
-  const W=16,H=16;
-  // 1) filledMap from sampling, skip outer white r>200
-  const filledMap=Array.from({length:H},()=>Array(W).fill(false));
-  for(let r=0;r<H;r++){
-    for(let c=0;c<W;c++){
-      if(HELMET_GRID[r][c]!=='.'){
-        filledMap[r][c]=true;
+  // ---- build voxels - NO OVERLAP, frozen matrices ----
+  const geom = new THREE.BoxGeometry(GEOM, GEOM, DEPTH);
+  const whiteGeom = new THREE.BoxGeometry(GEOM, GEOM, DEPTH);
+  const whiteMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, flatShading: true });
+
+  for(let r = 0; r < gridH; r++){
+    for(let c = 0; c < gridW; c++){
+      const x = (c - gridW / 2 + 0.5) * SPACING;
+      const y = -(r - gridH / 2 + 0.5) * SPACING;
+      if(filledMap[r][c]){
+        const col = colorMap[r][c];
+        const mat = new THREE.MeshStandardMaterial({
+          color: new THREE.Color('rgb(' + (col.r | 0) + ',' + (col.g | 0) + ',' + (col.b | 0) + ')'),
+          roughness: 0.9, metalness: 0.15, flatShading: true
+        });
+        const m = new THREE.Mesh(geom, mat);
+        m.position.set(x, y, 0); m.updateMatrix(); m.matrixAutoUpdate = false;
+        helmetGroup.add(m);
+      } else if(!visited[r][c]){
+        const m = new THREE.Mesh(whiteGeom, whiteMat);
+        m.position.set(x, y, 0); m.updateMatrix(); m.matrixAutoUpdate = false;
+        helmetGroup.add(m);
       }
     }
   }
 
-  // 2) BFS flood from border empty cells -> visited
-  const visited=Array.from({length:H},()=>Array(W).fill(false));
-  const q=[];
-  for(let r=0;r<H;r++){
-    for(let c=0;c<W;c++){
-      if((r===0||r===H-1||c===0||c===W-1)&&!filledMap[r][c]){
-        visited[r][c]=true;
-        q.push([r,c]);
-      }
+  helmetGroup.position.y = 0.25;
+  return helmetGroup;
+}
+
+/* ---------- Wearable Steve Helmet ---------- */
+function buildSteveHelmet(){
+  const hGrp = new THREE.Group();
+  const ironMat = new THREE.MeshStandardMaterial({ color: 0xd4d9e0, roughness: 0.45, metalness: 0.35, flatShading: true });
+  const trimMat = new THREE.MeshStandardMaterial({ color: 0x5a6069, roughness: 0.60, metalness: 0.25, flatShading: true });
+  const shineMat = new THREE.MeshStandardMaterial({ color: 0xf4f7fb, roughness: 0.35, metalness: 0.45, flatShading: true });
+
+  // Top plate
+  const topMesh = new THREE.Mesh(new THREE.BoxGeometry(1.16, 0.15, 1.16), ironMat);
+  topMesh.position.set(0, 1.05, 0);
+  hGrp.add(topMesh);
+
+  // Top shine strip
+  const shineMesh = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.04, 1.12), shineMat);
+  shineMesh.position.set(-0.25, 1.13, 0);
+  hGrp.add(shineMesh);
+
+  // Back plate
+  const backMesh = new THREE.Mesh(new THREE.BoxGeometry(1.16, 0.88, 0.15), ironMat);
+  backMesh.position.set(0, 0.53, -0.52);
+  hGrp.add(backMesh);
+
+  // Left cheek/ear plate
+  const leftMesh = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.88, 1.05), ironMat);
+  leftMesh.position.set(-0.52, 0.53, -0.04);
+  hGrp.add(leftMesh);
+
+  // Right cheek/ear plate
+  const rightMesh = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.88, 1.05), ironMat);
+  rightMesh.position.set(0.52, 0.53, -0.04);
+  hGrp.add(rightMesh);
+
+  // Front brow plate
+  const browMesh = new THREE.Mesh(new THREE.BoxGeometry(1.16, 0.34, 0.15), ironMat);
+  browMesh.position.set(0, 0.82, 0.52);
+  hGrp.add(browMesh);
+
+  // Nose bridge guard
+  const noseMesh = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.32, 0.15), trimMat);
+  noseMesh.position.set(0, 0.50, 0.52);
+  hGrp.add(noseMesh);
+
+  // Cheek bottom trims
+  const lTrim = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.28, 0.34), trimMat);
+  lTrim.position.set(-0.52, 0.22, 0.32);
+  hGrp.add(lTrim);
+
+  const rTrim = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.28, 0.34), trimMat);
+  rTrim.position.set(0.52, 0.22, 0.32);
+  hGrp.add(rTrim);
+
+  return hGrp;
+}
+
+let steveHelmetMesh = null;
+let prevSteveHelmetMesh = null;
+
+const icoArmorFull = (function(){
+  const c = makeCanvas(9, 9), g = c.getContext('2d');
+  const pal = {
+    B: '#1a1c20',
+    L: '#d8dee6',
+    M: '#8d95a0',
+    D: '#4f555e'
+  };
+  const pattern = [
+    ".BB...BB.",
+    "BLLBBLLMB",
+    "BLLMMLLMB",
+    "BLLMMMDMB",
+    ".BLMMDMB.",
+    "..BLMDMB.",
+    "...BDMB..",
+    "....B...."
+  ];
+  for(let y=0; y<pattern.length; y++){
+    for(let x=0; x<pattern[y].length; x++){
+      const ch = pattern[y][x];
+      if(pal[ch]){ g.fillStyle = pal[ch]; g.fillRect(x, y, 1, 1); }
     }
   }
-  while(q.length>0){
-    const [cr,cc]=q.shift();
-    const dirs=[[1,0],[-1,0],[0,1],[0,-1]];
-    for(let i=0;i<4;i++){
-      const nr=cr+dirs[i][0],nc=cc+dirs[i][1];
-      if(nr>=0&&nr<H&&nc>=0&&nc<W&&!visited[nr][nc]&&!filledMap[nr][nc]){
-        visited[nr][nc]=true;
-        q.push([nr,nc]);
-      }
+  return c.toDataURL();
+})();
+
+const icoArmorHalf = (function(){
+  const c = makeCanvas(9, 9), g = c.getContext('2d');
+  const pal = {
+    B: '#1a1c20',
+    L: '#d8dee6',
+    M: '#8d95a0',
+    D: '#4f555e'
+  };
+  const pattern = [
+    ".BB...BB.",
+    "BLLBBLLMB",
+    "BLLMMLLMB",
+    "BLLMMMDMB",
+    ".BLMMDMB.",
+    "..BLMDMB.",
+    "...BDMB..",
+    "....B...."
+  ];
+  for(let y=0; y<pattern.length; y++){
+    for(let x=0; x<pattern[y].length; x++){
+      if(x >= 5) continue;
+      const ch = pattern[y][x];
+      if(pal[ch]){ g.fillStyle = pal[ch]; g.fillRect(x, y, 1, 1); }
     }
   }
+  return c.toDataURL();
+})();
 
-  // 3) interior hole = !filled && !visited
-  // 4) if filled: iron material, if interior: white material #FFFFFF
-  // for r,c:
-  //   x=(c-W/2+0.5)*SPACING, y=-(r-H/2+0.5)*SPACING
-  //   mesh.position.set(x,y,0); mesh.updateMatrix(); mesh.matrixAutoUpdate=false;
-  //   armorGroup.add(mesh);
-  for(let r=0;r<H;r++){
-    for(let c=0;c<W;c++){
-      const isFilled=filledMap[r][c];
-      const isInterior=!isFilled&&!visited[r][c];
-      if(!isFilled&&!isInterior){continue;}
+function updateArmorBar(){
+  const bar = document.getElementById('armorBar');
+  if(!bar) return;
+  const pts = getPlayerArmorPoints();
+  if(pts <= 0){
+    bar.style.display = 'none';
+    bar.innerHTML = '';
+    return;
+  }
+  bar.style.display = 'flex';
+  bar.innerHTML = '';
+  let fullCount = Math.floor(pts / 2);
+  let halfCount = (pts % 2 === 1) ? 1 : 0;
+  for(let i=0; i<fullCount; i++){
+    const im = document.createElement('img');
+    im.src = icoArmorFull;
+    im.alt = 'Armor';
+    bar.appendChild(im);
+  }
+  if(halfCount > 0){
+    const im = document.createElement('img');
+    im.src = icoArmorHalf;
+    im.alt = 'Half Armor';
+    bar.appendChild(im);
+  }
+}
 
-      let mesh;
-      if(isFilled){
-        const ch=HELMET_GRID[r][c];
-        mesh=new THREE.Mesh(geom,palMats[ch]||palMats['M']);
-      }else{
-        mesh=new THREE.Mesh(whiteGeom,whiteMat);
-      }
-      mesh.castShadow=true;
-      mesh.receiveShadow=true;
-
-      const x=(c-W/2+0.5)*SPACING;
-      const y=-(r-H/2+0.5)*SPACING;
-      mesh.position.set(x,y,0);
-      mesh.updateMatrix();
-      mesh.matrixAutoUpdate=false;
-      armorGroup.add(mesh);
+function syncEquippedArmor(){
+  const helmItem = armorItems[0];
+  if(helmItem && helmItem.id === 'iron_helmet'){
+    if(!steveHelmetMesh && typeof steve !== 'undefined' && steve && steve.head){
+      steveHelmetMesh = buildSteveHelmet();
+      steve.head.add(steveHelmetMesh);
+    }
+    if(typeof prevSteve !== 'undefined' && prevSteve && prevSteve.head && !prevSteveHelmetMesh){
+      prevSteveHelmetMesh = buildSteveHelmet();
+      prevSteve.head.add(prevSteveHelmetMesh);
+    }
+  } else {
+    if(steveHelmetMesh && typeof steve !== 'undefined' && steve && steve.head){
+      steve.head.remove(steveHelmetMesh);
+      steveHelmetMesh.traverse(safeDisposeObj);
+      steveHelmetMesh = null;
+    }
+    if(prevSteveHelmetMesh && typeof prevSteve !== 'undefined' && prevSteve && prevSteve.head){
+      prevSteve.head.remove(prevSteveHelmetMesh);
+      prevSteveHelmetMesh.traverse(safeDisposeObj);
+      prevSteveHelmetMesh = null;
     }
   }
-
-  return armorGroup;
+  updateArmorBar();
+  if(typeof invOpen !== 'undefined' && invOpen && typeof renderPrev === 'function'){
+    renderPrev();
+  }
 }
 
 /* ---------- Tools, Weapons, Stick & Torch definitions ---------- */
@@ -2135,6 +2562,7 @@ function flatIcons(){
   ICON_OF.iron_helmet=cvHelmet.toDataURL();
   ICON_OF.stick=cvStick.toDataURL();
   ICON_OF.torch=cvTorch.toDataURL();
+  ICON_OF.snow=cvSnowTop.toDataURL();
   const TT=['pickaxe','axe','sword','shovel'];
   const TM=['wood','stone','iron'];
   for(let ti=0;ti<TT.length;ti++){
@@ -2160,7 +2588,8 @@ const ICON_BUILDS={
   bread:function(){return buildBreadModel();},
   iron_helmet:function(){return buildHelmetModel();},
   stick:function(){return buildStickModel();},
-  torch:function(){return buildTorchModel();}
+  torch:function(){return buildTorchModel();},
+  snow:function(){return new THREE.Mesh(new THREE.BoxGeometry(2,2,2),[lam(cvSnowSide),lam(cvSnowSide),lam(cvSnowTop),lam(cvDirt),lam(cvSnowSide),lam(cvSnowSide)]);}
 };
 (function(){
   const TT=['pickaxe','axe','sword','shovel'];
@@ -2247,7 +2676,27 @@ const icoBook=pixelIcon(["GGGGG","GWWGG","GGGGG","GWWGG","GGGGG"],{G:'#3f9e3f',W
 const icoArrow=pixelIcon(["....A...","....AA..","AAAAAAAA","AAAAAAAA","....AA..","....A..."],{A:'#3f3f3f'});
 function buildInventoryStatics(){
   const ac=document.getElementById('armorCol');
-  if(ac){[icoHelm,icoChest,icoLegs,icoBoots].forEach(function(u){const d=document.createElement('div');d.className='islot';const im=document.createElement('img');im.src=u;d.appendChild(im);ac.appendChild(d);});}
+  if(ac){
+    ac.innerHTML='';
+    armorSlotEls.length=0;
+    const defaultIcons=[icoHelm,icoChest,icoLegs,icoBoots];
+    for(let i=0;i<4;i++){
+      const d=document.createElement('div');
+      d.className='islot';
+      const im=document.createElement('img');
+      im.src=defaultIcons[i];
+      im.style.opacity='0.35';
+      d.appendChild(im);
+      (function(idx){
+        d.addEventListener('pointerdown',function(e){
+          e.stopPropagation();
+          tapSlot('armor',idx);
+        });
+      })(i);
+      armorSlotEls.push(d);
+      ac.appendChild(d);
+    }
+  }
   const sh=document.getElementById('shieldSlot');
   if(sh){const im=document.createElement('img');im.src=icoShield;sh.appendChild(im);}
   const bk=document.getElementById('bookSlot');
@@ -2409,6 +2858,20 @@ function setSlotContent(el,item){
   }
 }
 function refreshInv(){
+  for(let i=0;i<4;i++){
+    if(armorSlotEls[i]){
+      setSlotContent(armorSlotEls[i],armorItems[i]);
+      if(!armorItems[i]){
+        const defaultIcons=[icoHelm,icoChest,icoLegs,icoBoots];
+        const im=document.createElement('img');
+        im.src=defaultIcons[i];
+        im.style.opacity='0.35';
+        armorSlotEls[i].appendChild(im);
+      }
+      const isSel=selectedSlot&&selectedSlot.area==='armor'&&selectedSlot.idx===i;
+      armorSlotEls[i].classList.toggle('sel',!!isSel);
+    }
+  }
   for(let i=0;i<27;i++){
     if(mainSlotEls[i]){
       setSlotContent(mainSlotEls[i],invMain[i]);
@@ -2448,6 +2911,10 @@ function ensurePrev(){
   const dl=new THREE.DirectionalLight(0xffffff,1.5);dl.position.set(2,3,4);prevScene.add(dl);
   prevCam=new THREE.PerspectiveCamera(24,0.5,0.1,50);
   prevSteve=buildSteve();prevSteve.group.rotation.y=0.55;prevScene.add(prevSteve.group);
+  if(armorItems[0]&&armorItems[0].id==='iron_helmet'&&!prevSteveHelmetMesh){
+    prevSteveHelmetMesh=buildSteveHelmet();
+    prevSteve.head.add(prevSteveHelmetMesh);
+  }
   prevCam.position.set(0.5,1.2,3.6);prevCam.lookAt(0,1.0,0);
 }
 function renderPrev(){
@@ -2782,7 +3249,10 @@ function frame(){
   chunks.forEach(function(rec){if(rec.wm){rec.wm.position.y=bobY;}});
   for(let i=0;i<parts.length;i++){const p=parts[i];if(!p.m.visible){continue;}p.life-=dt;if(p.life<=0){p.m.visible=false;continue;}p.vel.y-=20*dt;p.m.position.addScaledVector(p.vel,dt);const s=clamp(p.life/0.55,0,1);p.m.scale.setScalar(Math.max(0.2,s));}
   if(toastT>0){toastT-=dt;if(toastT<=0){toastEl.style.opacity='0';}}
-  if(coordsEl){coordsEl.textContent='Position: '+Math.round(player.pos.x)+', '+Math.round(player.pos.y)+', '+Math.round(player.pos.z);}
+  if(coordsEl){
+    const bi=getBiomeInfo(Math.round(player.pos.x),Math.round(player.pos.z),Math.round(player.pos.y));
+    coordsEl.textContent='XYZ: '+Math.round(player.pos.x)+', '+Math.round(player.pos.y)+', '+Math.round(player.pos.z)+' | '+bi.name;
+  }
   streamT+=dt;
   if(streamT>0.25){streamT=0;updateStreaming();sortQueue();}
   processQueue(6);
